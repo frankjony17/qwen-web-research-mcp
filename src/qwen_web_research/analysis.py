@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import httpx
+from mcp.server.mcpserver import Context
 
 from . import ollama_client
 from .chunking import split_into_chunks
@@ -25,13 +26,21 @@ REDUCE_SYSTEM_PROMPT = (
 )
 
 
-def analyze_text(text: str, question: str, *, model: str = ollama_client.DEFAULT_MODEL) -> str:
+async def analyze_text(
+    text: str,
+    question: str,
+    *,
+    model: str = ollama_client.DEFAULT_MODEL,
+    ctx: Context | None = None,
+) -> str:
     """Answer `question` about `text`, chunking + map-reduce if the text is long."""
     chunks = split_into_chunks(text)
 
     if len(chunks) == 1:
+        if ctx:
+            await ctx.report_progress(0, 1, "Analizando página...")
         try:
-            return ollama_client.chat(
+            return await ollama_client.chat(
                 f"Pregunta/filtro: {question}\n\nContenido:\n{chunks[0]}",
                 system=MAP_SYSTEM_PROMPT,
                 model=model,
@@ -44,8 +53,10 @@ def analyze_text(text: str, question: str, *, model: str = ollama_client.DEFAULT
 
     partial_results = []
     for i, chunk in enumerate(chunks, start=1):
+        if ctx:
+            await ctx.report_progress(i - 1, len(chunks) + 1, f"Analizando fragmento {i}/{len(chunks)}...")
         try:
-            result = ollama_client.chat(
+            result = await ollama_client.chat(
                 f"Pregunta/filtro: {question}\n\nFragmento {i}/{len(chunks)}:\n{chunk}",
                 system=MAP_SYSTEM_PROMPT,
                 model=model,
@@ -59,9 +70,12 @@ def analyze_text(text: str, question: str, *, model: str = ollama_client.DEFAULT
             f"(Nota: la página es muy larga, solo se analizaron los primeros {MAX_CHUNKS} fragmentos.)"
         )
 
+    if ctx:
+        await ctx.report_progress(len(chunks), len(chunks) + 1, "Combinando resultados...")
+
     combined = "\n\n".join(partial_results)
     try:
-        return ollama_client.chat(
+        return await ollama_client.chat(
             f"Pregunta original: {question}\n\nExtractos parciales:\n{combined}",
             system=REDUCE_SYSTEM_PROMPT,
             model=model,

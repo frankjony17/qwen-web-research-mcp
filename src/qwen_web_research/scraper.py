@@ -1,10 +1,11 @@
 """Fetch a URL and extract its main readable content, regardless of site layout."""
 from __future__ import annotations
 
-import time
+import asyncio
 
 import httpx
 import trafilatura
+from mcp.server.mcpserver import Context
 
 USER_AGENT = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
@@ -20,7 +21,7 @@ class FetchError(RuntimeError):
     pass
 
 
-def fetch_page_text(url: str, *, timeout: float = 20.0) -> dict:
+async def fetch_page_text(url: str, *, timeout: float = 20.0, ctx: Context | None = None) -> dict:
     """Download a URL and extract clean article text + metadata.
 
     Uses trafilatura's extraction, which strips navigation/ads/boilerplate
@@ -29,26 +30,34 @@ def fetch_page_text(url: str, *, timeout: float = 20.0) -> dict:
     """
     response = None
     last_timeout_exc: httpx.TimeoutException | None = None
-    for attempt in range(MAX_TIMEOUT_RETRIES + 1):
-        try:
-            response = httpx.get(
-                url,
-                timeout=timeout,
-                follow_redirects=True,
-                headers={"User-Agent": USER_AGENT},
-            )
-            response.raise_for_status()
-            break
-        except httpx.TimeoutException as exc:
-            last_timeout_exc = exc
-            if attempt < MAX_TIMEOUT_RETRIES:
-                time.sleep(RETRY_BACKOFF_SECONDS * (attempt + 1))
-                continue
-            raise FetchError(
-                f"Failed to fetch {url}: timed out after {MAX_TIMEOUT_RETRIES + 1} attempts"
-            ) from last_timeout_exc
-        except httpx.HTTPError as exc:
-            raise FetchError(f"Failed to fetch {url}: {exc}") from exc
+    async with httpx.AsyncClient() as client:
+        for attempt in range(MAX_TIMEOUT_RETRIES + 1):
+            try:
+                response = await client.get(
+                    url,
+                    timeout=timeout,
+                    follow_redirects=True,
+                    headers={"User-Agent": USER_AGENT},
+                )
+                response.raise_for_status()
+                break
+            except httpx.TimeoutException as exc:
+                last_timeout_exc = exc
+                if attempt < MAX_TIMEOUT_RETRIES:
+                    wait = RETRY_BACKOFF_SECONDS * (attempt + 1)
+                    if ctx:
+                        await ctx.report_progress(
+                            attempt + 1,
+                            MAX_TIMEOUT_RETRIES + 1,
+                            f"Timeout obteniendo {url}, reintentando en {wait:.0f}s...",
+                        )
+                    await asyncio.sleep(wait)
+                    continue
+                raise FetchError(
+                    f"Failed to fetch {url}: timed out after {MAX_TIMEOUT_RETRIES + 1} attempts"
+                ) from last_timeout_exc
+            except httpx.HTTPError as exc:
+                raise FetchError(f"Failed to fetch {url}: {exc}") from exc
 
     extracted = trafilatura.extract(
         response.text,

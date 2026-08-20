@@ -45,7 +45,7 @@ def ollama_base_url() -> str:
 DEFAULT_CHAT_TIMEOUT = float(os.environ.get("OLLAMA_CHAT_TIMEOUT", "600"))
 
 
-def chat(
+async def chat(
     prompt: str,
     *,
     system: str | None = None,
@@ -58,8 +58,8 @@ def chat(
         messages.append({"role": "system", "content": system})
     messages.append({"role": "user", "content": prompt})
 
-    with httpx.Client(timeout=timeout) as client:
-        response = client.post(
+    async with httpx.AsyncClient(timeout=timeout) as client:
+        response = await client.post(
             f"{ollama_base_url()}/api/chat",
             json={"model": model, "messages": messages, "stream": False},
         )
@@ -68,8 +68,8 @@ def chat(
         return data["message"]["content"]
 
 
-def list_models() -> list[str]:
-    with httpx.Client(timeout=10.0) as client:
-        response = client.get(f"{ollama_base_url()}/api/tags")
+async def list_models() -> list[str]:
+    async with httpx.AsyncClient(timeout=10.0) as client:
+        response = await client.get(f"{ollama_base_url()}/api/tags")
         response.raise_for_status()
         return [m["name"] for m in response.json().get("models", [])]
