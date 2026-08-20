@@ -3,11 +3,58 @@ from __future__ import annotations
 
 import asyncio
 import uuid
+from urllib.parse import urljoin, urlparse
 
 import httpx
+import lxml.html
 import trafilatura
 from mcp.server.mcpserver import Context
 from pydantic import BaseModel, Field
+
+# trafilatura's content extraction can drop <a href> links on listing-style
+# pages (rows of ad/article links get treated as boilerplate/navigation and
+# pruned, even with include_links=True), leaving the model no real URL to
+# follow -- so it hallucinates one instead. Pull same-domain content links
+# directly from the raw HTML as a reliable supplement.
+ASSET_EXTENSIONS = (
+    ".css", ".js", ".ico", ".png", ".jpg", ".jpeg", ".gif", ".svg", ".webp",
+    ".woff", ".woff2", ".ttf", ".xml", ".json",
+)
+IGNORED_PATH_SEGMENTS = ("wp-content", "wp-includes", "wp-json", "xmlrpc.php", "feed", "cdn-cgi")
+MAX_EXTRACTED_LINKS = 60
+MIN_LINK_TEXT_LENGTH = 8
+
+
+def _extract_page_links(html: str, base_url: str) -> list[dict]:
+    try:
+        tree = lxml.html.fromstring(html)
+    except Exception:
+        return []
+
+    base_domain = urlparse(base_url).netloc
+    seen: set[str] = set()
+    links: list[dict] = []
+    for a in tree.iter("a"):
+        href = a.get("href")
+        text = (a.text_content() or "").strip()
+        if not href or len(text) < MIN_LINK_TEXT_LENGTH:
+            continue
+        absolute = urljoin(base_url, href)
+        parsed = urlparse(absolute)
+        if parsed.netloc != base_domain or parsed.scheme not in ("http", "https"):
+            continue
+        if any(parsed.path.lower().endswith(ext) for ext in ASSET_EXTENSIONS):
+            continue
+        if any(seg in parsed.path for seg in IGNORED_PATH_SEGMENTS):
+            continue
+        if absolute in seen:
+            continue
+        seen.add(absolute)
+        links.append({"text": text[:120], "url": absolute})
+        if len(links) >= MAX_EXTRACTED_LINKS:
+            break
+    return links
+
 
 USER_AGENT = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
@@ -143,6 +190,7 @@ async def fetch_page_text(url: str, *, timeout: float = 20.0, ctx: Context | Non
         response.text,
         include_comments=False,
         include_tables=True,
+        include_links=True,
         output_format="markdown",
         with_metadata=True,
         url=url,
@@ -152,10 +200,17 @@ async def fetch_page_text(url: str, *, timeout: float = 20.0, ctx: Context | Non
 
     metadata = trafilatura.extract_metadata(response.text, default_url=url)
 
+    links = _extract_page_links(response.text, url)
+    if links:
+        links_section = "\n\n## Enlaces encontrados en esta página (usa estas URLs exactas, no las inventes)\n"
+        links_section += "\n".join(f"- [{link['text']}]({link['url']})" for link in links)
+        extracted += links_section
+
     return {
         "url": url,
         "title": metadata.title if metadata else None,
         "author": metadata.author if metadata else None,
         "date": metadata.date if metadata else None,
         "text": extracted,
+        "links": links,
     }
