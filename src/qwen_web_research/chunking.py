@@ -1,0 +1,31 @@
+"""Split long text into overlapping chunks sized for the model's context window."""
+from __future__ import annotations
+
+# Rough heuristic: ~4 chars/token for English/Spanish text. Qwen3 14b has a
+# 40K token context; we budget generously for the prompt wrapper + response.
+CHARS_PER_TOKEN = 4
+DEFAULT_CHUNK_TOKENS = 6000
+DEFAULT_OVERLAP_TOKENS = 200
+
+
+def split_into_chunks(
+    text: str,
+    *,
+    chunk_tokens: int = DEFAULT_CHUNK_TOKENS,
+    overlap_tokens: int = DEFAULT_OVERLAP_TOKENS,
+) -> list[str]:
+    chunk_size = chunk_tokens * CHARS_PER_TOKEN
+    overlap = overlap_tokens * CHARS_PER_TOKEN
+
+    if len(text) <= chunk_size:
+        return [text]
+
+    chunks = []
+    start = 0
+    while start < len(text):
+        end = start + chunk_size
+        chunks.append(text[start:end])
+        if end >= len(text):
+            break
+        start = end - overlap
+    return chunks
