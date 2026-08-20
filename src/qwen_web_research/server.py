@@ -33,6 +33,9 @@ def analyze_page(url: str, question: str) -> str:
     return f"# {title}\n{url}\n\n{answer}"
 
 
+MAX_RESULTS_CAP = 10
+
+
 @mcp.tool()
 def search_site_and_analyze(site: str, phrase: str, question: str, max_results: int = 5) -> str:
     """Search a specific site for pages/listings containing `phrase`, then run
@@ -42,12 +45,16 @@ def search_site_and_analyze(site: str, phrase: str, question: str, max_results: 
     `site:` search to find matches, then trafilatura + Qwen to read and filter
     each page's content, so it keeps working even if the site's layout changes.
 
+    Each match takes roughly 30s-3min to fetch and analyze (more for long pages),
+    so keep max_results modest — it is capped at 10 regardless of the value passed.
+
     Args:
         site: Domain to search within, e.g. "example.com".
         phrase: Exact phrase the publication/listing must contain.
         question: What information to extract from each matching page.
-        max_results: Max number of matching pages to analyze (default 5).
+        max_results: Max number of matching pages to analyze (default 5, capped at 10).
     """
+    max_results = max(1, min(max_results, MAX_RESULTS_CAP))
     matches = search_site(site, phrase, max_results=max_results)
     if not matches:
         return f'No se encontraron resultados en {site} para la frase "{phrase}".'
