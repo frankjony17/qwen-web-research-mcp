@@ -1,8 +1,7 @@
 """Split long text into overlapping chunks sized for the model's context window."""
 from __future__ import annotations
 
-# Rough heuristic: ~4 chars/token for English/Spanish text. Qwen3 14b has a
-# 40K token context; we budget generously for the prompt wrapper + response.
+# Rough estimate: ~4 chars per token.
 CHARS_PER_TOKEN = 4
 DEFAULT_CHUNK_TOKENS = 3000
 DEFAULT_OVERLAP_TOKENS = 150

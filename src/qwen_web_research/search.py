@@ -10,9 +10,7 @@ from mcp.server.mcpserver import Context
 
 logger = logging.getLogger("qwen_web_research.search")
 
-# backend="auto" already spreads the search across multiple engines (not just
-# DuckDuckGo), which helps avoid a single provider's block. This adds retry
-# with backoff on top, for when even that gets rate-limited.
+# backend="auto" spreads the search across multiple engines to avoid blocks.
 MAX_SEARCH_RETRIES = 3
 RETRY_BACKOFF_SECONDS = 5.0
 
@@ -22,13 +20,8 @@ async def search_site(
 ) -> list[dict]:
     """Find pages on `site` that mention `phrase`, using DuckDuckGo's `site:` operator.
 
-    Works for any domain without site-specific scraping code, since it relies on
-    the site already being indexed by the search engine rather than a custom
-    search integration per site.
-
-    max_results=None (the default) asks ddgs for as many results as it can
-    return -- it aggregates across multiple search engines (backend="auto"),
-    so this is the actual maximum available, not an arbitrary cap.
+    Works for any domain without site-specific scraping code. max_results=None
+    (the default) means no cap -- ddgs returns everything it finds.
     """
     domain = site.replace("https://", "").replace("http://", "").strip("/")
     query = f'site:{domain} "{phrase}"'

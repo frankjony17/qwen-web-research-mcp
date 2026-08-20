@@ -1,4 +1,4 @@
-"""HTTP client for a local Ollama server (running on Windows, reached from WSL via the NAT gateway)."""
+"""HTTP client for a local Ollama server running on the Windows host."""
 from __future__ import annotations
 
 import logging
@@ -18,11 +18,7 @@ OLLAMA_PORT = int(os.environ.get("OLLAMA_PORT", "11434"))
 
 @lru_cache(maxsize=1)
 def _detect_windows_host_ip() -> str:
-    """Return the IP WSL uses to reach the Windows host in NAT mode.
-
-    Explicit OLLAMA_HOST_IP overrides detection. Otherwise this reads the
-    default route, which points at the Windows host's vEthernet (WSL) adapter.
-    """
+    """IP WSL uses to reach the Windows host. Override with OLLAMA_HOST_IP."""
     override = os.environ.get("OLLAMA_HOST_IP")
     if override:
         return override

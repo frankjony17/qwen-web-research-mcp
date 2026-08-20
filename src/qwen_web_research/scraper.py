@@ -14,11 +14,7 @@ from pydantic import BaseModel, Field
 
 logger = logging.getLogger("qwen_web_research.scraper")
 
-# trafilatura's content extraction can drop <a href> links on listing-style
-# pages (rows of ad/article links get treated as boilerplate/navigation and
-# pruned, even with include_links=True), leaving the model no real URL to
-# follow -- so it hallucinates one instead. Pull same-domain content links
-# directly from the raw HTML as a reliable supplement.
+# trafilatura can drop real links on listing pages, so we pull them from the raw HTML too.
 ASSET_EXTENSIONS = (
     ".css", ".js", ".ico", ".png", ".jpg", ".jpeg", ".gif", ".svg", ".webp",
     ".woff", ".woff2", ".ttf", ".xml", ".json",
@@ -64,15 +60,15 @@ USER_AGENT = (
     "(KHTML, like Gecko) Chrome/128.0 Safari/537.36 qwen-web-research-mcp/0.1"
 )
 
-# Only timeouts are retried (transient) -- a 404 or DNS failure won't fix itself.
+# Only timeouts are retried -- a 404 or DNS failure won't fix itself.
 MAX_TIMEOUT_RETRIES = 2
 RETRY_BACKOFF_SECONDS = 3.0
 
 # How many times we ask "did you finish the human check?" before giving up.
 MAX_VERIFICATION_ROUNDS = 3
 
-# Rough signals for "this is a bot-verification page", not real content.
-# We only ask the human to solve it themselves -- never attempted programmatically.
+# Signals that a page is a bot-check, not real content. We never solve these
+# ourselves -- only ask a human to do it in their own browser.
 CHALLENGE_MARKERS = (
     "checking your browser",
     "verifying you are human",
@@ -136,14 +132,9 @@ async def _handle_human_verification(url: str, ctx: Context | None) -> bool:
 async def fetch_page_text(url: str, *, timeout: float = 20.0, ctx: Context | None = None) -> dict:
     """Download a URL and extract clean article text + metadata.
 
-    Uses trafilatura's extraction, which strips navigation/ads/boilerplate
-    based on content heuristics rather than site-specific CSS selectors, so
-    it keeps working if a site's markup changes.
-
-    If the page turns out to be a bot-verification challenge (Cloudflare,
-    CAPTCHA, etc.), this asks the human user -- via MCP elicitation -- to solve
-    it themselves in their own browser, then retries. It never attempts to
-    solve or bypass the check programmatically.
+    Adapts to any site layout since it uses content heuristics, not CSS
+    selectors. If the page is a bot-check (Cloudflare, CAPTCHA), asks the
+    human to solve it in their own browser via MCP elicitation, then retries.
     """
     response = None
     last_timeout_exc: httpx.TimeoutException | None = None

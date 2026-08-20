@@ -19,13 +19,9 @@ mcp = MCPServer("qwen-web-research")
 
 @mcp.tool()
 async def analyze_page(url: str, question: str, ctx: Context) -> str:
-    """Fetch a web page, and use a local Qwen model to extract/answer `question`
-    about its full content. Long pages are automatically split into chunks and
-    analyzed piece by piece (map-reduce), so no content is skipped.
-
-    Reports progress while working (page fetch retries, per-chunk analysis),
-    so a client that respects MCP progress notifications won't time out
-    waiting on a long page -- this can take 30s-3min or more.
+    """Fetch a web page and use a local Qwen model to answer `question` about
+    its full content. Long pages are chunked and analyzed piece by piece, so
+    nothing is skipped -- can take 30s-3min. Reports progress while working.
 
     Args:
         url: The page to fetch and analyze.
@@ -50,25 +46,17 @@ async def analyze_page(url: str, question: str, ctx: Context) -> str:
 async def search_site_and_analyze(
     site: str, phrase: str, question: str, ctx: Context, max_results: int | None = None
 ) -> str:
-    """Search a specific site for pages/listings containing `phrase`, then run
+    """Search a site for pages/listings containing `phrase`, then run
     `analyze_page`-style extraction on each match to answer `question`.
-
-    Works on any site without site-specific scraping code: it uses DuckDuckGo's
-    `site:` search to find matches, then trafilatura + Qwen to read and filter
-    each page's content, so it keeps working even if the site's layout changes.
-
-    Each match takes roughly 30s-3min to fetch and analyze (more for long pages),
-    so a large number of matches will take proportionally long to return.
-    Progress is reported per match and per chunk, for MCP clients that respect it.
+    Works on any site: uses DuckDuckGo's `site:` search, no per-site code.
+    Each match takes 30s-3min, so many matches take proportionally long.
 
     Args:
         site: Domain to search within, e.g. "example.com".
         phrase: Exact phrase the publication/listing must contain.
         question: What information to extract from each matching page.
-        max_results: Max number of matching pages to analyze. Leave unset (the
-            default) to get as many as the search can find -- it aggregates
-            across multiple search engines, so this is the real maximum, not
-            an arbitrary cap. Set it only to deliberately limit the run.
+        max_results: Max pages to analyze. Leave unset for no cap (as many
+            as the search finds across all engines).
     """
     start = time.monotonic()
     logger.info("search_site_and_analyze start site=%s phrase=%r question=%r max_results=%s",

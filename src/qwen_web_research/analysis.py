@@ -11,7 +11,7 @@ from .chunking import split_into_chunks
 
 logger = logging.getLogger("qwen_web_research.analysis")
 
-# Bounds worst-case wall time for very long pages (e.g. huge listing pages).
+# Caps how long a huge page can take to process.
 MAX_CHUNKS = 12
 
 MAP_SYSTEM_PROMPT = (
