@@ -42,7 +42,16 @@ def ollama_base_url() -> str:
     return f"http://{_detect_windows_host_ip()}:{OLLAMA_PORT}"
 
 
-def chat(prompt: str, *, system: str | None = None, model: str = DEFAULT_MODEL, timeout: float = 180.0) -> str:
+DEFAULT_CHAT_TIMEOUT = float(os.environ.get("OLLAMA_CHAT_TIMEOUT", "600"))
+
+
+def chat(
+    prompt: str,
+    *,
+    system: str | None = None,
+    model: str = DEFAULT_MODEL,
+    timeout: float = DEFAULT_CHAT_TIMEOUT,
+) -> str:
     """Send a single-turn chat request to Ollama and return the assistant's text."""
     messages = []
     if system:

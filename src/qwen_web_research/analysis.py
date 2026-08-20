@@ -1,8 +1,13 @@
 """Map-reduce analysis of long page content with Qwen."""
 from __future__ import annotations
 
+import httpx
+
 from . import ollama_client
 from .chunking import split_into_chunks
+
+# Bounds worst-case wall time for very long pages (e.g. huge listing pages).
+MAX_CHUNKS = 12
 
 MAP_SYSTEM_PROMPT = (
     "Eres un asistente de investigación. Se te da un fragmento de una página web "
@@ -25,24 +30,41 @@ def analyze_text(text: str, question: str, *, model: str = ollama_client.DEFAULT
     chunks = split_into_chunks(text)
 
     if len(chunks) == 1:
-        return ollama_client.chat(
-            f"Pregunta/filtro: {question}\n\nContenido:\n{chunks[0]}",
-            system=MAP_SYSTEM_PROMPT,
-            model=model,
-        )
+        try:
+            return ollama_client.chat(
+                f"Pregunta/filtro: {question}\n\nContenido:\n{chunks[0]}",
+                system=MAP_SYSTEM_PROMPT,
+                model=model,
+            )
+        except httpx.TimeoutException:
+            return "Error: el modelo tardó demasiado en responder (timeout)."
+
+    truncated = len(chunks) > MAX_CHUNKS
+    chunks = chunks[:MAX_CHUNKS]
 
     partial_results = []
     for i, chunk in enumerate(chunks, start=1):
-        result = ollama_client.chat(
-            f"Pregunta/filtro: {question}\n\nFragmento {i}/{len(chunks)}:\n{chunk}",
-            system=MAP_SYSTEM_PROMPT,
-            model=model,
-        )
+        try:
+            result = ollama_client.chat(
+                f"Pregunta/filtro: {question}\n\nFragmento {i}/{len(chunks)}:\n{chunk}",
+                system=MAP_SYSTEM_PROMPT,
+                model=model,
+            )
+        except httpx.TimeoutException:
+            result = "Error: timeout analizando este fragmento, se omitió."
         partial_results.append(f"--- Extracto {i} ---\n{result}")
 
+    if truncated:
+        partial_results.append(
+            f"(Nota: la página es muy larga, solo se analizaron los primeros {MAX_CHUNKS} fragmentos.)"
+        )
+
     combined = "\n\n".join(partial_results)
-    return ollama_client.chat(
-        f"Pregunta original: {question}\n\nExtractos parciales:\n{combined}",
-        system=REDUCE_SYSTEM_PROMPT,
-        model=model,
-    )
+    try:
+        return ollama_client.chat(
+            f"Pregunta original: {question}\n\nExtractos parciales:\n{combined}",
+            system=REDUCE_SYSTEM_PROMPT,
+            model=model,
+        )
+    except httpx.TimeoutException:
+        return "Error: timeout combinando los extractos. Extractos parciales:\n\n" + combined
