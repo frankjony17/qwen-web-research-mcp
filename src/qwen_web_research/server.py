@@ -48,7 +48,7 @@ async def analyze_page(url: str, question: str, ctx: Context) -> str:
 
 @mcp.tool()
 async def search_site_and_analyze(
-    site: str, phrase: str, question: str, ctx: Context, max_results: int = 5
+    site: str, phrase: str, question: str, ctx: Context, max_results: int | None = None
 ) -> str:
     """Search a specific site for pages/listings containing `phrase`, then run
     `analyze_page`-style extraction on each match to answer `question`.
@@ -58,17 +58,20 @@ async def search_site_and_analyze(
     each page's content, so it keeps working even if the site's layout changes.
 
     Each match takes roughly 30s-3min to fetch and analyze (more for long pages),
-    so a large max_results will take proportionally long to return. Progress is
-    reported per match and per chunk, for MCP clients that respect it.
+    so a large number of matches will take proportionally long to return.
+    Progress is reported per match and per chunk, for MCP clients that respect it.
 
     Args:
         site: Domain to search within, e.g. "example.com".
         phrase: Exact phrase the publication/listing must contain.
         question: What information to extract from each matching page.
-        max_results: Max number of matching pages to analyze (default 5).
+        max_results: Max number of matching pages to analyze. Leave unset (the
+            default) to get as many as the search can find -- it aggregates
+            across multiple search engines, so this is the real maximum, not
+            an arbitrary cap. Set it only to deliberately limit the run.
     """
     start = time.monotonic()
-    logger.info("search_site_and_analyze start site=%s phrase=%r question=%r max_results=%d",
+    logger.info("search_site_and_analyze start site=%s phrase=%r question=%r max_results=%s",
                 site, phrase, question, max_results)
     matches = await search_site(site, phrase, max_results=max_results, ctx=ctx)
     logger.info("search_site_and_analyze found %d matches for site=%s", len(matches), site)

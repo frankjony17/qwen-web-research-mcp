@@ -18,17 +18,21 @@ RETRY_BACKOFF_SECONDS = 5.0
 
 
 async def search_site(
-    site: str, phrase: str, *, max_results: int = 5, ctx: Context | None = None
+    site: str, phrase: str, *, max_results: int | None = None, ctx: Context | None = None
 ) -> list[dict]:
     """Find pages on `site` that mention `phrase`, using DuckDuckGo's `site:` operator.
 
     Works for any domain without site-specific scraping code, since it relies on
     the site already being indexed by the search engine rather than a custom
     search integration per site.
+
+    max_results=None (the default) asks ddgs for as many results as it can
+    return -- it aggregates across multiple search engines (backend="auto"),
+    so this is the actual maximum available, not an arbitrary cap.
     """
     domain = site.replace("https://", "").replace("http://", "").strip("/")
     query = f'site:{domain} "{phrase}"'
-    logger.info("search start query=%r max_results=%d", query, max_results)
+    logger.info("search start query=%r max_results=%s", query, max_results)
 
     last_exc: DDGSException | None = None
     results: list[dict] = []
