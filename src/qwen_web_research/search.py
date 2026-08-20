@@ -2,10 +2,13 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 
 from ddgs import DDGS
 from ddgs.exceptions import DDGSException, RatelimitException, TimeoutException
 from mcp.server.mcpserver import Context
+
+logger = logging.getLogger("qwen_web_research.search")
 
 # backend="auto" already spreads the search across multiple engines (not just
 # DuckDuckGo), which helps avoid a single provider's block. This adds retry
@@ -25,6 +28,7 @@ async def search_site(
     """
     domain = site.replace("https://", "").replace("http://", "").strip("/")
     query = f'site:{domain} "{phrase}"'
+    logger.info("search start query=%r max_results=%d", query, max_results)
 
     last_exc: DDGSException | None = None
     results: list[dict] = []
@@ -40,6 +44,8 @@ async def search_site(
             last_exc = exc
             if attempt < MAX_SEARCH_RETRIES:
                 wait = RETRY_BACKOFF_SECONDS * (attempt + 1)
+                logger.warning("search rate-limited/timeout query=%r attempt=%d, retrying in %.0fs",
+                                query, attempt + 1, wait)
                 if ctx:
                     await ctx.report_progress(
                         attempt + 1,
@@ -48,10 +54,12 @@ async def search_site(
                     )
                 await asyncio.sleep(wait)
                 continue
+            logger.error("search failed query=%r after %d attempts: %s", query, MAX_SEARCH_RETRIES + 1, exc)
             raise
     else:
         raise last_exc  # unreachable, satisfies type checkers
 
+    logger.info("search done query=%r results=%d", query, len(results))
     return [
         {"title": r.get("title"), "url": r.get("href"), "snippet": r.get("body")}
         for r in results

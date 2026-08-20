@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import uuid
 from urllib.parse import urljoin, urlparse
 
@@ -10,6 +11,8 @@ import lxml.html
 import trafilatura
 from mcp.server.mcpserver import Context
 from pydantic import BaseModel, Field
+
+logger = logging.getLogger("qwen_web_research.scraper")
 
 # trafilatura's content extraction can drop <a href> links on listing-style
 # pages (rows of ad/article links get treated as boilerplate/navigation and
@@ -103,6 +106,7 @@ def _looks_like_challenge_page(response: httpx.Response) -> bool:
 
 async def _handle_human_verification(url: str, ctx: Context | None) -> bool:
     """Ask the human to solve the check themselves. Returns True if they say they did."""
+    logger.info("challenge page detected url=%s ctx_available=%s", url, ctx is not None)
     if ctx is None:
         return False
 
@@ -120,9 +124,12 @@ async def _handle_human_verification(url: str, ctx: Context | None) -> bool:
             VerificationDone,
         )
         if result.action == "accept" and result.data.done:
+            logger.info("human verification confirmed done url=%s", url)
             return True
         if result.action != "accept":
+            logger.info("human verification declined/cancelled url=%s action=%s", url, result.action)
             return False
+    logger.info("human verification gave up after %d rounds url=%s", MAX_VERIFICATION_ROUNDS, url)
     return False
 
 
@@ -141,6 +148,7 @@ async def fetch_page_text(url: str, *, timeout: float = 20.0, ctx: Context | Non
     response = None
     last_timeout_exc: httpx.TimeoutException | None = None
     verification_attempted = False
+    logger.info("fetch start url=%s", url)
     async with httpx.AsyncClient() as client:
         attempt = 0
         while attempt <= MAX_TIMEOUT_RETRIES:
@@ -155,6 +163,7 @@ async def fetch_page_text(url: str, *, timeout: float = 20.0, ctx: Context | Non
                 last_timeout_exc = exc
                 if attempt < MAX_TIMEOUT_RETRIES:
                     wait = RETRY_BACKOFF_SECONDS * (attempt + 1)
+                    logger.warning("fetch timeout url=%s attempt=%d, retrying in %.0fs", url, attempt + 1, wait)
                     if ctx:
                         await ctx.report_progress(
                             attempt + 1,
@@ -164,10 +173,12 @@ async def fetch_page_text(url: str, *, timeout: float = 20.0, ctx: Context | Non
                     await asyncio.sleep(wait)
                     attempt += 1
                     continue
+                logger.error("fetch failed url=%s: timed out after %d attempts", url, MAX_TIMEOUT_RETRIES + 1)
                 raise FetchError(
                     f"Failed to fetch {url}: timed out after {MAX_TIMEOUT_RETRIES + 1} attempts"
                 ) from last_timeout_exc
             except httpx.HTTPError as exc:
+                logger.error("fetch failed url=%s: %s", url, exc)
                 raise FetchError(f"Failed to fetch {url}: {exc}") from exc
 
             if _looks_like_challenge_page(response):
@@ -183,7 +194,9 @@ async def fetch_page_text(url: str, *, timeout: float = 20.0, ctx: Context | Non
             try:
                 response.raise_for_status()
             except httpx.HTTPError as exc:
+                logger.error("fetch failed url=%s: HTTP %s", url, exc)
                 raise FetchError(f"Failed to fetch {url}: {exc}") from exc
+            logger.info("fetch ok url=%s status=%d bytes=%d", url, response.status_code, len(response.content))
             break
 
     extracted = trafilatura.extract(
@@ -196,6 +209,7 @@ async def fetch_page_text(url: str, *, timeout: float = 20.0, ctx: Context | Non
         url=url,
     )
     if not extracted:
+        logger.error("extraction failed url=%s: trafilatura returned no content", url)
         raise FetchError(f"Could not extract readable content from {url}")
 
     metadata = trafilatura.extract_metadata(response.text, default_url=url)
@@ -205,6 +219,9 @@ async def fetch_page_text(url: str, *, timeout: float = 20.0, ctx: Context | Non
         links_section = "\n\n## Enlaces encontrados en esta página (usa estas URLs exactas, no las inventes)\n"
         links_section += "\n".join(f"- [{link['text']}]({link['url']})" for link in links)
         extracted += links_section
+
+    logger.info("extracted url=%s title=%r chars=%d links=%d", url, metadata.title if metadata else None,
+                len(extracted), len(links))
 
     return {
         "url": url,
