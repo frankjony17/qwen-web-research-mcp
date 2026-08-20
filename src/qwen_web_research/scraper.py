@@ -27,6 +27,8 @@ CHALLENGE_MARKERS = (
     "checking your browser",
     "verifying you are human",
     "verify you are human",
+    "you are not a bot",
+    "confirm you are human",
     "just a moment",
     "attention required! | cloudflare",
     "cf-turnstile",
