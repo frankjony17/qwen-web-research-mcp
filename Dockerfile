@@ -14,4 +14,4 @@ ENV OLLAMA_HOST_IP=host.docker.internal
 
 EXPOSE 8000
 
-CMD ["python", "-m", "qwen_web_research.server"]
+CMD ["python", "-m", "web_research.server"]

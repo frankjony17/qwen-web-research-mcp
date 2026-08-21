@@ -12,7 +12,7 @@ import trafilatura
 from mcp.server.mcpserver import Context
 from pydantic import BaseModel, Field
 
-logger = logging.getLogger("qwen_web_research.scraper")
+logger = logging.getLogger("web_research.scraper")
 
 # trafilatura can drop real links on listing pages, so we pull them from the raw HTML too.
 ASSET_EXTENSIONS = (
@@ -57,7 +57,7 @@ def _extract_page_links(html: str, base_url: str) -> list[dict]:
 
 USER_AGENT = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
-    "(KHTML, like Gecko) Chrome/128.0 Safari/537.36 qwen-web-research-mcp/0.1"
+    "(KHTML, like Gecko) Chrome/128.0 Safari/537.36 web-research-mcp/0.1"
 )
 
 # Only timeouts are retried -- a 404 or DNS failure won't fix itself.

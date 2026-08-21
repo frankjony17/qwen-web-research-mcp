@@ -1,4 +1,4 @@
-"""Map-reduce analysis of long page content with Qwen."""
+"""Map-reduce analysis of long page content with a local LLM via Ollama."""
 from __future__ import annotations
 
 import logging
@@ -9,7 +9,7 @@ from mcp.server.mcpserver import Context
 from . import ollama_client
 from .chunking import split_into_chunks
 
-logger = logging.getLogger("qwen_web_research.analysis")
+logger = logging.getLogger("web_research.analysis")
 
 # Caps how long a huge page can take to process.
 MAX_CHUNKS = 12

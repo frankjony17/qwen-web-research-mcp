@@ -8,7 +8,7 @@ from ddgs import DDGS
 from ddgs.exceptions import DDGSException, RatelimitException, TimeoutException
 from mcp.server.mcpserver import Context
 
-logger = logging.getLogger("qwen_web_research.search")
+logger = logging.getLogger("web_research.search")
 
 # backend="auto" spreads the search across multiple engines to avoid blocks.
 MAX_SEARCH_RETRIES = 3

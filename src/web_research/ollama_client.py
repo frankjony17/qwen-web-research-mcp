@@ -10,9 +10,9 @@ from functools import lru_cache
 
 import httpx
 
-logger = logging.getLogger("qwen_web_research.ollama")
+logger = logging.getLogger("web_research.ollama")
 
-DEFAULT_MODEL = os.environ.get("QWEN_MODEL", "qwen3:14b")
+DEFAULT_MODEL = os.environ.get("OLLAMA_MODEL", "qwen3:14b")
 OLLAMA_PORT = int(os.environ.get("OLLAMA_PORT", "11434"))
 
 

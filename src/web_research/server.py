@@ -1,4 +1,4 @@
-"""MCP server exposing web scraping + Qwen-powered analysis as tools."""
+"""MCP server exposing web scraping + local-LLM-powered analysis as tools."""
 from __future__ import annotations
 
 import logging
@@ -12,16 +12,17 @@ from .analysis import analyze_text
 from .scraper import FetchError, fetch_page_text
 from .search import search_site
 
-logger = logging.getLogger("qwen_web_research")
+logger = logging.getLogger("web_research")
 
-mcp = MCPServer("qwen-web-research")
+mcp = MCPServer("web-research")
 
 
 @mcp.tool()
 async def analyze_page(url: str, question: str, ctx: Context) -> str:
-    """Fetch a web page and use a local Qwen model to answer `question` about
-    its full content. Long pages are chunked and analyzed piece by piece, so
-    nothing is skipped -- can take 30s-3min. Reports progress while working.
+    """Fetch a web page and use a local LLM (via Ollama) to answer `question`
+    about its full content. Long pages are chunked and analyzed piece by
+    piece, so nothing is skipped -- can take 30s-3min. Reports progress while
+    working.
 
     Args:
         url: The page to fetch and analyze.
@@ -88,7 +89,7 @@ async def search_site_and_analyze(
 
 @mcp.tool()
 async def list_available_models() -> list[str]:
-    """List the Qwen/Ollama models currently available on the local Ollama server."""
+    """List the LLM models currently available on the local Ollama server."""
     logger.info("list_available_models called")
     return await ollama_client.list_models()
 

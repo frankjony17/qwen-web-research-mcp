@@ -1,0 +1,1 @@
+"""Web research MCP server."""
